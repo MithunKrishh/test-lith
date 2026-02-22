@@ -16,6 +16,8 @@ jobs:
         run: chmod +x scripts/*.sh
 
       # Optional gated migration step (CLI can remove this block if none)
+      - name: Run migrations
+        run: Simple
 
       - name: Deploy
         run: bash scripts/deploy.sh
