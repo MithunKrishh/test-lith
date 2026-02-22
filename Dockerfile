@@ -1,30 +1,28 @@
-# ── deps stage: install only production dependencies ─────────────────────────
-FROM node:20-alpine AS deps
+# ── Build stage ───────────────────────────────────────────────────────────────
+FROM node:20-alpine AS builder
 WORKDIR /app
-COPY package*.json ./
-RUN npm ci --omit=dev --ignore-scripts
 
-# ── build stage: compile/transpile source ─────────────────────────────────
-FROM node:20-alpine AS build
-WORKDIR /app
 COPY package*.json ./
-RUN npm ci --ignore-scripts
+# npm install works with or without a lockfile — no npm ci
+RUN npm install --omit=dev --no-audit --no-fund --ignore-scripts
+
 COPY . .
+# Transpile/bundle if a build script exists, otherwise no-op
 RUN npm run build --if-present
 
-# ── runtime stage: lean final image ─────────────────────────────────────
-FROM node:20-alpine AS runtime
+# ── Runtime stage ─────────────────────────────────────────────────────────────
+FROM node:20-alpine
 WORKDIR /app
 
-# Non-root user
+# Non-root user for security
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 
-COPY --chown=appuser:appgroup --from=deps  /app/node_modules ./node_modules
-COPY --chown=appuser:appgroup --from=build /app/dist        ./dist
-COPY --chown=appuser:appgroup --from=build /app/package.json ./package.json
+# Copy entire app from builder — works whether or not a dist/ folder was created
+COPY --chown=appuser:appgroup --from=builder /app ./
 
 USER appuser
 EXPOSE 3000
+
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
   CMD wget -qO- http://localhost:3000/health || exit 1
 
